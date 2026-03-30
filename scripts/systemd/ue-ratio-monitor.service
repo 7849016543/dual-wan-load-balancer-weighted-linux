@@ -1,0 +1,16 @@
+[Unit]
+Description=UE Ratio Dual WAN Monitor Service
+After=network.target systemd-networkd.service
+Wants=network.target systemd-networkd.service
+
+[Service]
+# The service runs as root to allow 'ip route' and 'ip rule' modifications
+Type=simple
+ExecStart=/usr/local/bin/ue-ratio-dual-wan-monitor.sh
+Restart=always
+RestartSec=5
+# Optional: Ensures the working directory is set if the script expects local files
+WorkingDirectory=/usr/local/bin
+
+[Install]
+WantedBy=multi-user.target
