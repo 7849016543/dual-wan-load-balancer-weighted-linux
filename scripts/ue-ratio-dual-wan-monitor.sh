@@ -5,7 +5,7 @@ ISP1_IF="eno1"
 ISP2_IF="lan0"
 ISP1_TABLE="1"
 ISP2_TABLE="2"
-SLACK_WEBHOOK_URL="https://hooks.slack.com/services/xxxxxxxxxxxxxm"
+SLACK_WEBHOOK_URL="https://hooks.slack.com/services/xxxxxxxCm"
 TEST_HOSTS=("1.1.1.1" "8.8.8.8" "208.67.222.222")
 STATUS_FILE="/var/run/wan_status"
 DETAILED_STATUS_FILE="/var/run/wan_detailed_status"
@@ -81,6 +81,11 @@ ensure_network_config() {
     # Enable IP forwarding
     echo 1 > /proc/sys/net/ipv4/ip_forward
     
+    # Enable multipath routing with Layer 4 hashing (source/dest IP + ports)
+    # This provides better distribution across connections
+    sysctl -w net.ipv4.fib_multipath_hash_policy=1 > /dev/null 2>&1 || true
+    sysctl -w net.ipv4.fib_multipath_use_neigh=1 > /dev/null 2>&1 || true
+    
     # Enable loose reverse path filtering
     for interface in "$ISP1_IF" "$ISP2_IF"; do
         if [ -d "/proc/sys/net/ipv4/conf/$interface" ]; then
@@ -91,7 +96,7 @@ ensure_network_config() {
         fi
     done
     
-    log_message "Network configuration verified"
+    log_message "Network configuration verified (L4 hash policy enabled)"
 }
 
 # Function to setup basic routing
@@ -140,9 +145,14 @@ setup_multipath() {
     
     # Setup multipath default route with 65-35 weight distribution
     # eno1 (1 Gbps) gets weight 65, lan0 (500 Mbps) gets weight 35
-    ip route replace default \
+    # Using L4 hash for better per-packet distribution
+    ip route replace default scope global \
         nexthop via "$ISP1_GW" dev "$ISP1_IF" weight 65 \
         nexthop via "$ISP2_GW" dev "$ISP2_IF" weight 35
+    
+    # Enable multipath routing with L4 hashing for better distribution
+    sysctl -w net.ipv4.fib_multipath_hash_policy=1 2>/dev/null || true
+    sysctl -w net.ipv4.fib_multipath_use_neigh=1 2>/dev/null || true
     
     log_message "Multipath routing setup completed (65% eno1, 35% lan0) for $ISP1_NET and $ISP2_NET"
     return 0
